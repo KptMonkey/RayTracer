@@ -75,10 +75,11 @@ bool
 refract(glm::vec3 const & v, glm::vec3 const & n, float niOverNt, glm::vec3 & refracted )
 {
     glm::vec3 uv = glm::normalize(v);
+
     float dt = glm::dot(uv, n);
-    float discriminant = 1.0f - niOverNt * niOverNt * (1 -dt * dt); // Wat?
-    if (discriminant) {
-        refracted = niOverNt * ( uv - n*dt ) - n *sqrt(discriminant);
+    float discriminant = 1.0f - niOverNt * niOverNt * (1.0f -dt * dt); // Wat?
+    if (discriminant>0.0f) {
+        refracted = niOverNt * ( uv - n*dt ) - n *std::sqrt(discriminant);
         return true;
     }
     else {
@@ -86,14 +87,51 @@ refract(glm::vec3 const & v, glm::vec3 const & n, float niOverNt, glm::vec3 & re
     }
 }
 
+float schlick( float cos, float ref_idx ) {
+    float r0 = ( 1.0f - ref_idx) / (1.0f + ref_idx );
+    r0 = r0*r0;
+    return r0 + (1.0f-r0) * pow((1-cos),5);
+}
+
+class Dielectric : public Material {
+public:
+    Dielectric( float ri ) : ref_idx( ri )
+    {}
+    virtual bool
+    scatter(Ray rIn, const HitRecord &rec, glm::vec3 &attenuation, Ray &scattered) {
+        glm::vec3 outward_normal;
+        glm::vec3 reflected = glm::reflect( rIn.Direction, rec.normal );
+        float nOverNt;
+        attenuation = glm::vec3(1.0f, 1.0f, 1.0f);
+        glm::vec3 refracted;
+        if ( glm::dot(rIn.Direction, rec.normal) > 0 ) {
+            outward_normal = -rec.normal;
+            nOverNt = ref_idx;
+        }
+        else {
+            outward_normal = rec.normal;
+            nOverNt = 1.0f/ref_idx;
+        }
+        if (refract( rIn.Direction, outward_normal, nOverNt, refracted)) {
+            scattered = Ray(rec.p, refracted);
+        }
+        else {
+            scattered = Ray(rec.p, reflected);
+            return false;
+        }
+        return true;
+
+    }
+    float ref_idx;
+};
+
 class Metal : public Material {
 public:
     Metal(glm::vec3 b ) : m_Blubb(b)
     {}
     bool
     scatter(Ray rIn, HitRecord const & rec, glm::vec3 &attenuation, Ray &scattered){
-        auto unitDir = glm::normalize(rIn.Direction);
-        glm::vec3 reflected = -reflect(unitDir, rec.normal);
+        glm::vec3 reflected = -glm::reflect(rIn.Direction, rec.normal);
         scattered = Ray(rec.p, reflected);
         attenuation = m_Blubb;
         return (glm::dot(scattered.Direction, rec.normal)>0);
@@ -217,8 +255,8 @@ public:
 int main() {
  std::string fileName = "rayImage.ppm";
  std::ofstream out(fileName, std::ios::out);
-int x = 800;
-int y = 600;
+int x = 200;
+int y = 100;
 float s = 200.0f;
 glm::vec3 blCorner(-2.0f, -1.0f, -1.0f);
 glm::vec3 horizontal(4.0f, 0.0f, 0.0f);
@@ -235,7 +273,7 @@ glm::vec3 center4(1.1f, 0.2f, -1.3f);
 list[0] = new Sphere(center1,0.5f, new Lambertian( glm::vec3(0.8f,0.3f,0.3f)));
 list[1] = new Sphere(center2,100.0f, new Lambertian(glm::vec3(0.8f, 0.8f, 0.0f)));
 list[2] = new Sphere(center3,0.4f, new Metal(glm::vec3(0.8f, 0.6f, 0.8f)));
-list[3] = new Sphere(center4,0.4f, new Metal(glm::vec3(0.4f, 0.5f, 0.8f)));
+list[3] = new Sphere(center4,0.4f, new Dielectric(1.3f));
 Hitable * world = new HitableList(list, 4);
 
 std::random_device rd;
