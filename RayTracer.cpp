@@ -41,11 +41,11 @@ public:
 };
 
 glm::vec3 randomInUnitSphere(){
-    std::random_device rd;
-    std::mt19937 mt(rd());
-    std::uniform_real_distribution<float> dist(0.0f, 1.0f);
+    static std::random_device rd;
+    static std::mt19937 mt(rd());
+    static std::uniform_real_distribution<float> dist(0.0f, 1.0f);
     glm::vec3 p(2.0f);
-    while( (glm::length(p)*glm::length(p)) >= 1.0f ){
+    while( (glm::dot(p,p)) >= 1.0f ){
         p = 2.0f * glm::vec3(dist(mt),dist(mt),dist(mt)) - glm::vec3(1.0f);
     }
     return p;
@@ -68,7 +68,22 @@ public:
 
 glm::vec3
 reflect( glm::vec3 & v, glm::vec3 & n) {
-    return (v - glm::dot(v,n)*n);
+    return (v - 2.0f * glm::dot(v,n)*n);
+}
+
+bool
+refract(glm::vec3 const & v, glm::vec3 const & n, float niOverNt, glm::vec3 & refracted )
+{
+    glm::vec3 uv = glm::normalize(v);
+    float dt = glm::dot(uv, n);
+    float discriminant = 1.0f - niOverNt * niOverNt * (1 -dt * dt); // Wat?
+    if (discriminant) {
+        refracted = niOverNt * ( uv - n*dt ) - n *sqrt(discriminant);
+        return true;
+    }
+    else {
+        return false;
+    }
 }
 
 class Metal : public Material {
@@ -189,7 +204,7 @@ public:
       m_Origin(orig)
   {}
   Ray getRay( float u, float v) {
-    return Ray(m_Origin, m_BlCorner + u*m_Horizontal+v*m_Vertical);
+    return Ray(m_Origin, glm::normalize(m_BlCorner + u*m_Horizontal+v*m_Vertical));
   }
   glm::vec3 m_BlCorner;
   glm::vec3 m_Horizontal;
@@ -202,9 +217,9 @@ public:
 int main() {
  std::string fileName = "rayImage.ppm";
  std::ofstream out(fileName, std::ios::out);
-int x = 200;
-int y = 100;
-float s = 50.0f;
+int x = 800;
+int y = 600;
+float s = 200.0f;
 glm::vec3 blCorner(-2.0f, -1.0f, -1.0f);
 glm::vec3 horizontal(4.0f, 0.0f, 0.0f);
 glm::vec3 vertical(0.0f,2.0f,0.0f);
@@ -214,8 +229,8 @@ out << "P3\n" << x << " " << y << "\n255\n";
 Hitable *list[4];
 glm::vec3 center1(0.0f, 0.0f, -1.0f);
 glm::vec3 center2(0.0f, -100.5f, -1.0f);
-glm::vec3 center3(-1.0f, 0.1f, -1.0f);
-glm::vec3 center4(1.0f, 0.2f, -1.0f);
+glm::vec3 center3(-1.1f, 0.1f, -1.0f);
+glm::vec3 center4(1.1f, 0.2f, -1.3f);
 
 list[0] = new Sphere(center1,0.5f, new Lambertian( glm::vec3(0.8f,0.3f,0.3f)));
 list[1] = new Sphere(center2,100.0f, new Lambertian(glm::vec3(0.8f, 0.8f, 0.0f)));
